@@ -63,15 +63,14 @@ class QLearningAgent:
         self.gamma = 0.95  # Factor de descuento para recompensas futuras
 
     def build_model(self):
-        # Construye una red neuronal simple para aproximar la función Q
         model = keras.Sequential([
-            keras.layers.Input(shape=(self.state_size,)),  # Capa de entrada explícita
-            keras.layers.Dense(24, activation='relu'),
-            keras.layers.Dense(24, activation='relu'),
-            keras.layers.Dense(self.action_size, activation='linear')
-        ])
+        keras.layers.Input(shape=(self.state_size,)),
+        keras.layers.Dense(24, activation='relu'),
+        keras.layers.Dense(24, activation='relu'),
+        keras.layers.Dense(self.action_size, activation='linear')
+    ])
         model.compile(optimizer=tf.optimizers.Adam(learning_rate=self.learning_rate),
-                      loss='mse')
+                  loss=tf.keras.losses.MeanSquaredError())
         return model
 
     def act(self, state):
@@ -102,21 +101,26 @@ class QLearningAgent:
         self.model.save(filename)
 
     def load_model(self, filename):
-        # Carga el modelo desde un archivo
-        if os.path.exists(filename):
-            self.model = keras.models.load_model(filename)
-            print(f"Modelo cargado desde {filename}")
-        else:
-            print(f"No se encontró el archivo {filename}. Se usará un nuevo modelo.")
+      if os.path.exists(filename):
+        self.model = tf.keras.models.load_model(filename, compile=False)
+        self.model.compile(optimizer=tf.optimizers.Adam(learning_rate=self.learning_rate),
+                           loss=tf.keras.losses.MeanSquaredError())
+        print(f"Modelo cargado desde {filename}")
+      else:
+        print(f"No se encontró el archivo {filename}. Se usará un nuevo modelo.")
 
 # Función de entrenamiento
 def train_agent(episodes=50, model_file='tictactoe_model.h5'):
     env = TicTacToe()
     agent = QLearningAgent(9, 9)
-
+    
     # Intenta cargar un modelo existente
-    agent.load_model(model_file)
-
+    if os.path.exists(model_file):
+        agent.load_model(model_file)
+        print(f"Modelo cargado desde {model_file}. Saltando el entrenamiento.")
+        return agent
+    
+    print("No se encontró un modelo existente. Iniciando entrenamiento...")
     for e in range(episodes):
         state = env.reset()
         done = False
@@ -127,20 +131,20 @@ def train_agent(episodes=50, model_file='tictactoe_model.h5'):
                 winner = env.check_winner()
                 if winner is not None:
                     done = True
-                    # Asigna recompensas: 1 para victoria, -1 para derrota, 0 para empate
                     reward = 1 if winner == 1 else -1 if winner == -1 else 0
                 else:
                     reward = 0
                 agent.train(state, action, reward, next_state, done)
                 state = next_state
-
-
-        print(f"Episodio: {e}/{episodes}")
-
+        
+        if e % 1000 == 0:
+            print(f"Episodio: {e}/{episodes}")
+    
     # Guarda el modelo entrenado
     agent.save_model(model_file)
     print(f"Modelo guardado en {model_file}")
     return agent
+
 
 # Función para jugar contra el agente entrenado
 def play_against_agent(agent):
@@ -152,7 +156,7 @@ def play_against_agent(agent):
         if env.current_player == 1:
             while True:
                 try:
-                    action = int(input("Tu turno (0-8): "))
+                       action = int(input("Tu turno (0-8): "))
                     if 0 <= action <= 8:
                         break
                     else:
@@ -174,8 +178,19 @@ def play_against_agent(agent):
         else:
             print("Movimiento inválido, intenta de nuevo.")
 
-# Entrenamiento del agente
-trained_agent = train_agent()
 
-# Jugar contra el agente entrenado
-play_against_agent(trained_agent)
+# Función principal
+def main():
+    model_file = 'tictactoe_model.h5'
+    trained_agent = train_agent(model_file=model_file)
+    
+    while True:
+        play_against_agent(trained_agent)
+        play_again = input("¿Quieres jugar otra vez? (s/n): ").lower()
+        if play_again != 's':
+            break
+
+    print("¡Gracias por jugar!")
+
+if __name__ == "__main__":
+    main()
